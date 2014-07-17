@@ -2,6 +2,7 @@ var fs = require('fs-extra'),
     path = require('path'),
     util = require('util'),
     async = require('async'),
+    colors = require('colors'),
     rt = require('read-torrent'),
     argv = process.argv.slice(2);
 
@@ -11,7 +12,7 @@ var fs = require('fs-extra'),
  */
 
 function exit(m) {
-    log(util.format('Error: %s', m));
+    log(util.format('Error: %s', m), 'red');
     process.exit(1);
 }
 
@@ -22,12 +23,15 @@ function pad(i, n) {
     return i;
 }
 
-function log(m) {
+function log(m, color) {
     var date = new Date();
     var hrs = pad(date.getHours(), 2);
     var min = pad(date.getMinutes(), 2);
     var sec = pad(date.getSeconds(), 2);
-    console.log(util.format('[%s:%s:%s] %s', hrs, min, sec, m));
+    var str = util.format('[%s:%s:%s] %s', hrs, min, sec, m);
+
+    if (color) color.split('.').forEach(function(col) { str = str[col]; });
+    console.log(str);
 }
 
 
@@ -52,7 +56,7 @@ dest = (dest.indexOf('/') === 0) ? dest : path.join(process.cwd(), dest);
 log('Files: ' + files);
 log('Source: ' + src);
 log('Dest: ' + dest);
-log('Hello there handsome :)');
+log('Symlink galore starting now', 'rainbow');
 
 
 /*
@@ -83,13 +87,13 @@ async.series(jobs, function(err, data) {
         jobs.push(async.apply(torrentHandler, d, files));
     });
 
-    log('Opened and parsed ' + jobs.length + ' torrent(s) successfully');
-    log('Walked source directory, found ' + files.length + ' file(s)');
+    log('Opened and parsed ' + jobs.length + ' torrent(s) successfully', 'green');
+    log('Walked source directory, found ' + files.length + ' file(s)', 'green');
 
 
     async.series(jobs, function(err) {
         if (err) return exit(err);
-        log('Finished!');
+        log('Finished!', 'green');
     });
 });
 
@@ -111,7 +115,7 @@ function torrentHandler(torrent, files, callback) {
     ],
     function(err, data) {
         if (err) {
-            log('WARNING: ' + err);
+            log('WARNING: ' + err, 'red');
             return callback(null);
         }
 
@@ -123,12 +127,12 @@ function torrentHandler(torrent, files, callback) {
                 matchCount++;
                 continue;
             }
-            log('WARNING: Could not find a match for file "' + i + '"');
+            log('WARNING: Could not find a match for file "' + i + '"', 'red');
         }
 
         log('Found matches for ' + matchCount + '/' + torrent.files.length + ' files');
         if (!matchCount) {
-            log('WARNING: Nothing to be done, no matches found');
+            log('WARNING: Nothing to be done, no matches found', 'red');
             return callback(null);
         }
 
@@ -266,14 +270,14 @@ function createSymlinks(matches, callback) {
         jobs.push(async.apply(function(sf, tf, callback) {
             fs.exists(tf, function(exists) {
                 if (exists) {
-                    log('WARNING: Can not create symlink "' + tf + '", file already exists');
+                    log('WARNING: Can not create symlink "' + tf + '", file already exists', 'red');
                     return callback(null);
                 }
 
                 fs.symlink(sf, tf, function(err) {
                     if (err) return callback(err);
 
-                    log('Symlink created: ' + sf + ' => ' + tf);
+                    log('Symlink created: ' + sf + ' => ' + tf, 'green');
                     callback(null);
                 });
             });
