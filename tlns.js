@@ -44,9 +44,9 @@ if (!src) exit('First argument needs to be the source of binary files');
 if (!dest) exit('Second argument needs to be the symlink destination');
 if (!files.length) exit('Third argument needs to be a torrent-file');
 
-for (var i in files) files[i] = path.join(__dirname, files[i]);
-src = (src.indexOf('/') === 0) ? src : path.join(__dirname, src);
-dest = (dest.indexOf('/') === 0) ? dest : path.join(__dirname, dest);
+for (var i in files) files[i] = (files[i].indexOf('/') === 0) ? files[i] : path.join(process.cwd(), files[i]);
+src = (src.indexOf('/') === 0) ? src : path.join(process.cwd(), src);
+dest = (dest.indexOf('/') === 0) ? dest : path.join(process.cwd(), dest);
 
 
 log('Files: ' + files);
