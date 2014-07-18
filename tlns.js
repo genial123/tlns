@@ -2,61 +2,47 @@ var fs = require('fs-extra'),
     path = require('path'),
     util = require('util'),
     async = require('async'),
+    stdio = require('stdio'),
     colors = require('colors'),
     rt = require('read-torrent'),
-    argv = process.argv.slice(2);
+    u = require('./util');
 
 
 /*
- * Helper functions
+ * Options
  */
 
-function exit(m) {
-    log(util.format('Error: %s', m), 'red');
-    process.exit(1);
-}
-
-function pad(i, n) {
-    i = i.toString();
-    while (i.length < n)
-        i = '0' + i;
-    return i;
-}
-
-function log(m, color) {
-    var date = new Date();
-    var hrs = pad(date.getHours(), 2);
-    var min = pad(date.getMinutes(), 2);
-    var sec = pad(date.getSeconds(), 2);
-    var str = util.format('[%s:%s:%s] %s', hrs, min, sec, m);
-
-    if (color) color.split('.').forEach(function(col) { str = str[col]; });
-    console.log(str);
-}
+var opts = stdio.getopt({
+    from: {
+        key: 'f',
+        args: 1,
+        description: 'Path to directory containing source files',
+        mandatory: true
+    },
+    to: {
+        key: 't',
+        args: 1,
+        description: 'Path to symlink target directory',
+        mandatory: true
+    },
+    test: {
+        description: 'Will not actually make changes to the file system'
+    }
+}, '[FILE1] [FILE2] ...');
 
 
-/*
- * Arguments
- */
+if (!opts.args || !opts.args.length)
+    u.exit('I want one or more torrents as last argument');
 
-var src = argv[0],
-    dest = argv[1],
-    files = argv.slice(2),
-    walkan = 10;
-
-if (!src) exit('First argument needs to be the source of binary files');
-if (!dest) exit('Second argument needs to be the symlink destination');
-if (!files.length) exit('Third argument needs to be a torrent-file');
-
-for (var i in files) files[i] = (files[i].indexOf('/') === 0) ? files[i] : path.join(process.cwd(), files[i]);
-src = (src.indexOf('/') === 0) ? src : path.join(process.cwd(), src);
-dest = (dest.indexOf('/') === 0) ? dest : path.join(process.cwd(), dest);
+opts.from = u.rcwd(opts.from);
+opts.to = u.rcwd(opts.to);
+opts.args = u.rcwd(opts.args);
 
 
-log('Files: ' + files);
-log('Source: ' + src);
-log('Dest: ' + dest);
-log('Symlink galore starting now', 'rainbow');
+u.log('Files: ' + opts.args);
+u.log('From: ' + opts.from);
+u.log('To: ' + opts.to);
+u.log('Symlink galore starting now', 'rainbow');
 
 
 /*
@@ -64,20 +50,25 @@ log('Symlink galore starting now', 'rainbow');
  */
 
 var jobs = [
-    async.apply(checkPath, src),
-    async.apply(checkPath, dest)
+    async.apply(checkPath, opts.from),
+    async.apply(checkPath, opts.to)
 ];
 
-files.forEach(function(file) {
+opts.args.forEach(function(file) {
     jobs.push(async.apply(checkPath, file));
     jobs.push(async.apply(rt, file));
 });
 
-jobs.push(async.apply(walk, src));
+jobs.push(async.apply(help.walk, opts.from, function(ep, stat, callback) {
+    callback(null, {
+        path: ep,
+        size: stat.size
+    });
+}));
 
 
 async.series(jobs, function(err, data) {
-    if (err) return exit(err);
+    if (err) return u.exit(err);
 
     var files = data.pop();
     var jobs = [];
@@ -87,13 +78,13 @@ async.series(jobs, function(err, data) {
         jobs.push(async.apply(torrentHandler, d, files));
     });
 
-    log('Opened and parsed ' + jobs.length + ' torrent(s) successfully', 'green');
-    log('Walked source directory, found ' + files.length + ' file(s)', 'green');
+    u.log('Opened and parsed ' + jobs.length + ' torrent(s) successfully', 'green');
+    u.log('Walked source directory, found ' + files.length + ' file(s)', 'green');
 
 
     async.series(jobs, function(err) {
-        if (err) return exit(err);
-        log('Finished!', 'green');
+        if (err) return u.exit(err);
+        u.log('Finished!', 'green');
     });
 });
 
@@ -103,11 +94,11 @@ async.series(jobs, function(err, data) {
  */
 
 function torrentHandler(torrent, files, callback) {
-    log('=========================================================================================');
-    log('=========================================================================================');
-    log('Processing torrent: ' + torrent.name + ' (' + torrent.infoHash + ')');
-    log('=========================================================================================');
-    log('=========================================================================================');
+    u.log('=========================================================================================');
+    u.log('=========================================================================================');
+    u.log('Processing torrent: ' + torrent.name + ' (' + torrent.infoHash + ')');
+    u.log('=========================================================================================');
+    u.log('=========================================================================================');
 
     async.series([
         async.apply(createSymlinkSkel, torrent.files),
@@ -115,7 +106,7 @@ function torrentHandler(torrent, files, callback) {
     ],
     function(err, data) {
         if (err) {
-            log('WARNING: ' + err, 'red');
+            u.log('WARNING: ' + err, 'red');
             return callback(null);
         }
 
@@ -127,19 +118,29 @@ function torrentHandler(torrent, files, callback) {
                 matchCount++;
                 continue;
             }
-            log('WARNING: Could not find a match for file "' + i + '"', 'red');
+            u.log('WARNING: Could not find a match for file "' + i + '"', 'red');
         }
 
-        log('Found matches for ' + matchCount + '/' + torrent.files.length + ' files');
+        u.log('Found matches for ' + matchCount + '/' + torrent.files.length + ' files');
         if (!matchCount) {
-            log('WARNING: Nothing to be done, no matches found', 'red');
+            u.log('WARNING: Nothing to be done, no matches found', 'red');
             return callback(null);
         }
 
 
-        createSymlinks(matches, function(err) {
-            if (err) exit(err);
-            log('Done deal!');
+        var links = [];
+        for (var i in matches) {
+            if (!matches[i].length) continue;
+            links.push({
+                from: matches[i][0],
+                to: path.join(args.to, i)
+            });
+        }
+
+        u.lns(links, opts.test, function(err) {
+            if (err) u.exit(err);
+
+            u.log('Done deal!');
             callback(null);
         });
     });
@@ -159,58 +160,14 @@ function checkPath(file, callback) {
 
 
 /*
- * Find files recursively by walking
- */
-
-function walk(dir, callback) {
-    var results = [];
-
-    fs.readdir(dir, function(err, list) {
-        if (err) return callback(err);
-
-        var count = list.length;
-        if (!count) return callback(null, results);
-
-        list.forEach(function(file) {
-            var fp = path.join(dir, file);
-
-            fs.stat(fp, function(err, stat) {
-                if (err) return callback(err);
-
-                if (stat.isDirectory()) {
-                    walk(fp, function(err, res) {
-                        results = results.concat(res);
-                        if (results.length >= walkan) {
-                            log('Walking found ' + walkan + ' files');
-                            walkan *= 10;
-                        }
-
-                        if (!--count)
-                            callback(null, results);
-                    });
-                }
-                else {
-                    results.push({
-                        path: fp,
-                        size: stat.size
-                    });
-                    if (!--count)
-                        callback(null, results);
-                }
-            });
-        });
-    });
-}
-
-
-/*
  * Create symlink directory skeleton
  */
 
 function createSymlinkSkel(files, callback) {
-    log('Creating symlink directory skeleton...');
+    u.log('Creating symlink directory skeleton...');
 
     if (!files.length) return callback(null);
+    if (opts.test) return callback(null);
     var jobs = [];
 
     files.forEach(function(file) {
@@ -252,37 +209,4 @@ function findFileMatches(tfs, sfs, callback) {
     }
 
     callback(null, results);
-}
-
-
-/*
- * Create symlinks for matches
- */
-
-function createSymlinks(matches, callback) {
-    var jobs = [];
-
-    for (var i in matches) {
-        if (!matches[i].length) continue;
-        var sf = matches[i][0];
-        var tf = path.join(dest, i);
-
-        jobs.push(async.apply(function(sf, tf, callback) {
-            fs.exists(tf, function(exists) {
-                if (exists) {
-                    log('WARNING: Can not create symlink "' + tf + '", file already exists', 'red');
-                    return callback(null);
-                }
-
-                fs.symlink(sf, tf, function(err) {
-                    if (err) return callback(err);
-
-                    log('Symlink created: ' + sf + ' => ' + tf, 'green');
-                    callback(null);
-                });
-            });
-        }, sf, tf));
-    }
-
-    async.parallel(jobs, callback);
 }
