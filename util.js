@@ -1,7 +1,8 @@
 var util = require('util'),
     path = require('path'),
     fs = require('fs'),
-    async = require('async');
+    async = require('async'),
+    colors = require('colors');
 
 
 /*

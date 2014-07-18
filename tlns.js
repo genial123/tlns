@@ -1,6 +1,5 @@
 var fs = require('fs-extra'),
     path = require('path'),
-    util = require('util'),
     async = require('async'),
     stdio = require('stdio'),
     colors = require('colors'),
@@ -34,6 +33,9 @@ var opts = stdio.getopt({
 if (!opts.args || !opts.args.length)
     u.exit('I want one or more torrents as last argument');
 
+if (opts.test)
+    u.log('Test mode activated', 'green');
+
 opts.from = u.rcwd(opts.from);
 opts.to = u.rcwd(opts.to);
 opts.args = u.rcwd(opts.args);
@@ -59,7 +61,7 @@ opts.args.forEach(function(file) {
     jobs.push(async.apply(rt, file));
 });
 
-jobs.push(async.apply(help.walk, opts.from, function(ep, stat, callback) {
+jobs.push(async.apply(u.walk, opts.from, function(ep, stat, callback) {
     callback(null, {
         path: ep,
         size: stat.size
@@ -133,7 +135,7 @@ function torrentHandler(torrent, files, callback) {
             if (!matches[i].length) continue;
             links.push({
                 from: matches[i][0],
-                to: path.join(args.to, i)
+                to: path.join(opts.to, i)
             });
         }
 
