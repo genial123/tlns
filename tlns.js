@@ -61,11 +61,11 @@ opts.args.forEach(function(file) {
     jobs.push(async.apply(rt, file));
 });
 
-jobs.push(async.apply(u.walk, opts.from, function(ep, stat, callback) {
-    callback(null, {
+jobs.push(async.apply(u.walk, opts.from, function(ep, stat) {
+    return {
         path: ep,
         size: stat.size
-    });
+    };
 }));
 
 
@@ -102,19 +102,13 @@ function torrentHandler(torrent, files, callback) {
     u.log('=========================================================================================');
     u.log('=========================================================================================');
 
-    async.series([
-        async.apply(createSymlinkSkel, torrent.files),
-        async.apply(findFileMatches, torrent.files, files)
-    ],
-    function(err, data) {
+    findFileMatches(torrent.files, files, function(err, matches) {
         if (err) {
             u.log('WARNING: ' + err, 'red');
             return callback(null);
         }
 
-        var matches = data[1];
         var matchCount = 0;
-
         for (var i in matches) {
             if (matches[i].length) {
                 matchCount++;
@@ -130,42 +124,37 @@ function torrentHandler(torrent, files, callback) {
         }
 
 
-        var links = [];
+        var jobs = [];
+
         for (var i in matches) {
             if (!matches[i].length) continue;
-            links.push({
-                from: matches[i][0],
-                to: path.join(opts.to, i)
-            });
+            var base = path.join(opts.to, path.dirname(i));
+
+            if (!opts.test && (base != '.'))
+                jobs.push(async.apply(fs.mkdirp, base, 0775));
+
+            jobs.push(async.apply(function(from, to, callback) {
+                if (opts.test) {
+                    u.log('Would symlink: ' + to + ' => ' + from, 'green');
+                    return callback(null);
+                }
+
+                u.lns(from, to, function(err) {
+                    if (err) u.log('WARNING: ' + err, 'red');
+                    else u.log('Symlink created: ' + to + ' => ' + from, 'green');
+
+                    callback(null);
+                });
+            }, matches[i][0], path.join(opts.to, i)));
         }
 
-        u.lns(links, opts.test, function(err) {
-            if (err) u.exit(err);
 
+        async.series(jobs, function(err) {
+            if (err) return u.exit(err);
             u.log('Done deal!');
             callback(null);
         });
     });
-}
-
-
-/*
- * Create symlink directory skeleton
- */
-
-function createSymlinkSkel(files, callback) {
-    u.log('Creating symlink directory skeleton...');
-
-    if (!files.length) return callback(null);
-    if (opts.test) return callback(null);
-    var jobs = [];
-
-    files.forEach(function(file) {
-        var fdn = path.join(dest, path.dirname(file.path));
-        jobs.push(async.apply(fs.mkdirp, fdn, 0775));
-    });
-
-    async.parallel(jobs, callback);
 }
 
 

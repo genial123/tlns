@@ -1,6 +1,6 @@
 var util = require('util'),
     path = require('path'),
-    fs = require('fs'),
+    fs = require('fs-extra'),
     async = require('async'),
     colors = require('colors');
 
@@ -101,13 +101,12 @@ var walk = exports.walk = function(dir, fn, statFn, callback) {
                 statFn(entryPath, function(err, stat) {
                     if (err) return cb(err);
 
-                    if (!stat.isDirectory())
-                        return fn(entryPath, stat, function(err, res) {
-                            if (err) return cb(err);
-
-                            results.push(res);
-                            if (!--count) cb(null, results);
-                        });
+                    if (!stat.isDirectory()) {
+                        var res = fn(entryPath, stat);
+                        if (res) results.push(res);
+                        if (!--count) cb(null, results);
+                        return;
+                    }
 
                     walkd(entryPath, function(err, res) {
                         if (err) return cb(err);
@@ -130,27 +129,10 @@ var walk = exports.walk = function(dir, fn, statFn, callback) {
 
 
 /*
- * Create symlinks
+ * Symlink
  */
 
-var lns = exports.lns = function(links, test, callback) {
-    if (!callback) {
-        callback = test;
-        test = true;
-    }
-
-    if (Object.prototype.toString.call(links) != '[object Array]')
-        links = [links];
-
-    var jobs = [];
-    links.forEach(function(link) {
-        jobs.push(async.apply(symlink, link.from, link.to, test));
-    });
-
-    async.series(jobs, callback);
-};
-
-function symlink(from, to, test, callback) {
+var lns = exports.lns = function(from, to, callback) {
     var jobs = [
         function(callback) {
             fs.exists(from, function(ex) {
@@ -166,12 +148,6 @@ function symlink(from, to, test, callback) {
         }
     ];
 
-    if (!test) jobs.push(async.apply(fs.symlink, from, to));
-
-    async.series(jobs, function(err) {
-        if (err) log('WARNING: ' + err, 'red');
-        else log('Symlink created: ' + from + ' => ' + to, 'green');
-
-        callback(null);
-    });
-}
+    jobs.push(async.apply(fs.symlink, from, to));
+    async.series(jobs, callback);
+};
