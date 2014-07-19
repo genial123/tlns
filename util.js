@@ -23,14 +23,19 @@ var pad = exports.pad = function(i, n) {
 
 var rcwd = exports.rcwd = function(paths) {
     if (Object.prototype.toString.call(paths) != '[object Array]')
-        return (paths.indexOf('/') === 0) ? paths : path.join(process.cwd(), paths);
+        return rescwd(paths);
 
     var results = [];
     paths.forEach(function(p) {
-        results.push((p.indexOf('/') === 0) ? p : path.join(process.cwd(), p));
+        results.push(rescwd(p));
     });
     return results;
 };
+
+function rescwd(p) {
+    p = p.replace(/\/$/, '');
+    return (p.indexOf('/') === 0) ? p : path.join(process.cwd(), p);
+}
 
 
 /*

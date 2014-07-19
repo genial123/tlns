@@ -51,7 +51,7 @@ var jobs = [
     async.apply(u.checkp, opts.to)
 ];
 
-var regx = new RegExp(util.format('^%s/', opts.from));
+var regex = new RegExp(util.format('^%s/', opts.from));
 
 jobs.push(async.apply(u.walk, opts.from, function(ep, stat) {
     if (!stat.isSymbolicLink()) return ep.replace(regex, '');
@@ -115,7 +115,7 @@ async.series(jobs, function(err, data) {
             u.lns(from, to, function(err) {
                 if (err) u.log('WARNING: ' + err, 'red');
                 else u.log('Symlink created: ' + to + ' => ' + from, 'green');
-                
+
                 callback(null);
             });
         }, to, from));
