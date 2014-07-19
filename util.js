@@ -20,6 +20,7 @@ var pad = exports.pad = function(i, n) {
 /*
  * Resolve cwd if necessary
  */
+
 var rcwd = exports.rcwd = function(paths) {
     if (Object.prototype.toString.call(paths) != '[object Array]')
         return (paths.indexOf('/') === 0) ? paths : path.join(process.cwd(), paths);
@@ -29,6 +30,18 @@ var rcwd = exports.rcwd = function(paths) {
         results.push((p.indexOf('/') === 0) ? p : path.join(process.cwd(), p));
     });
     return results;
+};
+
+
+/*
+ * Check path existance
+ */
+
+var checkp = exports.checkp = function(p, callback) {
+    fs.exists(p, function(ex) {
+        if (!ex) return callback('Path does not exist: "' + p + '"');
+        callback(null);
+    });
 };
 
 

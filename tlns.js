@@ -52,12 +52,12 @@ u.log('Symlink galore starting now', 'rainbow');
  */
 
 var jobs = [
-    async.apply(checkPath, opts.from),
-    async.apply(checkPath, opts.to)
+    async.apply(u.checkp, opts.from),
+    async.apply(u.checkp, opts.to)
 ];
 
 opts.args.forEach(function(file) {
-    jobs.push(async.apply(checkPath, file));
+    jobs.push(async.apply(u.checkp, file));
     jobs.push(async.apply(rt, file));
 });
 
@@ -145,18 +145,6 @@ function torrentHandler(torrent, files, callback) {
             u.log('Done deal!');
             callback(null);
         });
-    });
-}
-
-
-/*
- * Check if path exists
- */
-
-function checkPath(file, callback) {
-    fs.exists(file, function(exists) {
-        if (!exists) return callback('File does not exist');
-        callback(null);
     });
 }
 
